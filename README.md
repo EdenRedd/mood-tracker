@@ -5,24 +5,51 @@
 The Lambda handler is defined as:
 
 ```text
-src.main.lambda_handler
+lambda_function.lambda_handler
 ```
 
-## POST endpoint
+## API endpoint
 
-Use API Gateway to route `POST /users/{user_id}/moods` to the Lambda function.
+Use API Gateway to route `ANY /mood-tracker` to the Lambda function.
 
-Request example:
+The backend accepts:
+  - `GET /mood-tracker?user_id=<id>&date=<YYYY-MM-DD>`
+  - `POST /mood-tracker`
+  - `PUT /mood-tracker`
+  - `OPTIONS /mood-tracker`
+
+Required fields:
+  - `user_id` in query string or JSON body
+  - `date` in query string or JSON body for GET and PUT
+
+POST example:
 
 ```json
 {
+  "user_id": "Raul",
   "mood": "happy",
   "date": "2026-05-17"
 }
 ```
 
-If `date` is omitted, the current UTC date is used.
+PUT example:
+
+```json
+{
+  "user_id": "Raul",
+  "mood": "happy",
+  "date": "2026-05-19"
+}
+```
+
+GET example:
+
+```text
+GET /mood-tracker?user_id=Raul&date=2026-05-19
+```
+
+If `date` is omitted on POST, the Lambda may default to current UTC date.
 
 ## Local testing
 
-You can still run `src/main.py` directly, although it does not provide an HTTP server locally.
+You can still run `main.py` directly, although it does not provide an HTTP server locally.

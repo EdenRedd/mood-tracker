@@ -6,7 +6,10 @@ from typing import Any, Dict, List
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-from log_mood import get_mood_table
+try:
+    from .log_mood import get_mood_table
+except ImportError:
+    from log_mood import get_mood_table
 
 try:
     from boto3.dynamodb.conditions import Key

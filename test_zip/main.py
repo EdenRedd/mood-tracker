@@ -9,25 +9,23 @@ from typing import Any, Dict, Optional
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-from edit_mood import update_mood
-from log_mood import log_mood
-from month_fetch import fetch_moods
+try:
+    from .edit_mood import update_mood
+    from .log_mood import log_mood
+    from .month_fetch import fetch_moods
+except ImportError:
+    from edit_mood import update_mood
+    from log_mood import log_mood
+    from month_fetch import fetch_moods
 
-PATH_PATTERN = re.compile(r"^/mood-tracker/?$")
-
-CORS_HEADERS = {
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "GET,POST,PUT,OPTIONS",
-    "Access-Control-Allow-Headers": "*",
-}
+PATH_PATTERN = re.compile(r"^/users/(?P<user_id>[^/]+)/moods$")
 
 
-def _build_response(status_code: int, body: Any = None) -> Dict[str, Any]:
-    headers = {"Content-Type": "application/json", **CORS_HEADERS}
+def _build_response(status_code: int, body: Any) -> Dict[str, Any]:
     return {
         "statusCode": status_code,
-        "headers": headers,
-        "body": "" if body is None else json.dumps(body),
+        "headers": {"Content-Type": "application/json"},
+        "body": json.dumps(body),
     }
 
 
@@ -70,10 +68,10 @@ def _extract_user_id(event: Dict[str, Any], payload: Dict[str, Any]) -> Optional
     if user_id:
         return user_id
 
-    query_params = event.get("queryStringParameters") or {}
-    user_id = query_params.get("user_id") or query_params.get("userId")
-    if user_id:
-        return user_id
+    path = event.get("path") or event.get("rawPath", "")
+    match = PATH_PATTERN.match(path)
+    if match:
+        return match.group("user_id")
 
     return (
         event.get("user_id")
@@ -94,14 +92,20 @@ def _handle_get(user_id: str, event: Dict[str, Any], payload: Dict[str, Any]) ->
         raise ValueError("date is required to fetch moods")
 
     items = fetch_moods(user_id=user_id, date_value=date_value)
-    return _build_response(200, {"user_id": user_id, "date": date_value, "items": items})
+    return {
+        "statusCode": 200,
+        "body": json.dumps({"user_id": user_id, "date": date_value, "items": items}),
+    }
 
 
 def _handle_post(user_id: str, payload: Dict[str, Any]) -> Dict[str, Any]:
     mood = payload.get("mood")
     entry_date = payload.get("date")
     item = log_mood(user_id=user_id, mood=mood, entry_date=entry_date)
-    return _build_response(201, {"message": "Mood logged.", "item": item})
+    return {
+        "statusCode": 201,
+        "body": json.dumps({"message": "Mood logged.", "item": item}),
+    }
 
 
 def _handle_put(user_id: str, payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -111,7 +115,10 @@ def _handle_put(user_id: str, payload: Dict[str, Any]) -> Dict[str, Any]:
         raise ValueError("date is required for editing an existing mood entry")
 
     item = update_mood(user_id=user_id, entry_date=entry_date, new_mood=new_mood)
-    return _build_response(200, {"message": "Mood updated.", "item": item})
+    return {
+        "statusCode": 200,
+        "body": json.dumps({"message": "Mood updated.", "item": item}),
+    }
 
 
 def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
@@ -124,13 +131,6 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     method = requested_operation or event.get("httpMethod") or event.get("requestContext", {}).get("http", {}).get("method")
     if isinstance(method, str):
         method = method.upper()
-
-    path = event.get("path") or event.get("rawPath", "")
-    if not PATH_PATTERN.match(path):
-        return _build_response(404, {"error": "Not found"})
-
-    if method == "OPTIONS":
-        return _build_response(204)
 
     if method not in {"GET", "POST", "PUT"}:
         return _build_response(405, {"error": "Method not allowed"})
